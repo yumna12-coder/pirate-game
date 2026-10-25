@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>مغامرة القراصنة – Bee-Bot</title>
+<style>
+:root{--bg:#fdf6e3;--ink:#2b2118;--card:#fff;--line:#d9c9a3;--acc:#c0392b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14202b;--ink:#f3ead7;--card:#1f2f3d;--line:#3b5368}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:Tahoma,"Segoe UI",Arial,sans-serif;padding:12px;text-align:center}
+h1{font-size:1.5rem;margin:4px 0}
+#msg{min-height:3em;margin:6px auto;max-width:480px;font-size:1.05rem}
+.wrap{max-width:480px;margin:auto}
+#board{position:relative;direction:ltr;display:grid;grid-template-columns:repeat(4,1fr);width:100%;aspect-ratio:1;border:4px solid #00aeef;border-radius:10px;overflow:hidden}
+.cell{display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:clamp(1.6rem,9vw,2.8rem);position:relative;border:1px solid rgba(255,255,255,.18);color:#fff}
+.cell small{position:absolute;bottom:2px;left:4px;font-size:.7rem;opacity:.8}
+.cell .lab{font-size:.65rem;position:absolute;top:2px;right:4px;opacity:.9}
+.sea{background:#1b6fa8}.land{background:#2f9e44}.sand{background:#c8a96a}
+.tgt{outline:4px dashed #ffd60a;outline-offset:-5px}
+.tgt i{position:absolute;top:3px;left:3px;background:#ffd60a;color:#222;border-radius:50%;width:1.4rem;height:1.4rem;font-size:.85rem;font-style:normal;font-weight:bold;display:flex;align-items:center;justify-content:center}
+.dng{outline:4px solid #e63946;outline-offset:-5px}
+.done{filter:grayscale(.6) brightness(.8)}
+#bot{position:absolute;width:25%;height:25%;display:flex;align-items:center;justify-content:center;transition:left .5s,top .5s;pointer-events:none}
+#bot div{position:relative;font-size:clamp(1.6rem,8vw,2.6rem);transition:transform .4s;filter:drop-shadow(0 2px 3px #000)}
+#bot div::before{content:"▲";position:absolute;top:-.6em;left:50%;transform:translateX(-50%);font-size:.45em;color:#ffd60a}
+#bot.bump div{animation:sh .3s}
+@keyframes sh{50%{translate:6px 0}}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px}
+.btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+button{font:inherit;font-size:1.05rem;border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:10px 14px;cursor:pointer;min-width:84px}
+button:active{transform:scale(.95)}
+button.go{background:#2f9e44;color:#fff;border-color:#2f9e44}
+button.clr{background:var(--acc);color:#fff;border-color:var(--acc)}
+#prog{min-height:3em;display:flex;flex-wrap:wrap;gap:4px;justify-content:center;align-items:center;font-size:1.4rem}
+#prog span{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:2px 8px}
+#prog span.cur{background:#ffd60a;color:#222}
+#lv{display:flex;gap:6px;justify-content:center;margin:6px 0}
+#lv button{min-width:44px;padding:6px 10px}
+#lv button.on{background:#00aeef;color:#fff;border-color:#00aeef}
+.hint{font-size:.85rem;opacity:.8}
+</style>
+</head>
+<body>
+<h1>🏴‍☠️ مغامرة القراصنة مع Bee-Bot</h1>
+<div id="lv"></div>
+<div class="wrap">
+<div id="msg"></div>
+<div id="board"></div>
+<div class="panel">
+<div id="prog"></div>
+<div class="btns" style="margin-top:8px">
+<button data-c="F">⬆️ أمام</button>
+<button data-c="B">⬇️ خلف</button>
+<button data-c="L">↺ يسار</button>
+<button data-c="R">↻ يمين</button>
+</div>
+<div class="btns" style="margin-top:8px">
+<button class="go" id="go">▶ انطلق</button>
+<button id="undo">↩ تراجع</button>
+<button class="clr" id="clr">🗑 مسح</button>
+</div>
+<p class="hint">أمام/خلف: خطوة واحدة. يمين/يسار: دوران ٩٠° في المكان. تجنّب خانة التمساح 🐊.</p>
+</div>
+</div>
+<script>
+var T={ // [emoji, terrain, name]
+A1:["🏝️","land","جزيرة"],B1:["⛰️","land","الجبال"],C1:["💰","land","صندوق الكنز"],D1:["🌊","sea","بحر"],
+A2:["🐊","sand","التمساح"],B2:["🌿","land","عشب"],C2:["🧭","sea","البوصلة"],D2:["🌊","sea","بحر"],
+A3:["🧗","sand","المنحدر"],B3:["🌴","land","النخيل"],C3:["🛕","sand","الهرم"],D3:["🌿","land","عشب"],
+A4:["🐬","sea","الدلافين"],B4:["🪨","land","صخور"],C4:["🚢","sea","سفينة القراصنة"],D4:["🌊","sea","بحر"]};
+var LV=[
+{t:"من السفينة إلى صندوق الكنز!",s:[3,2,0],g:["C1"],d:[]},
+{t:"مرّ بالنخيل 🌴 أولاً ثم اذهب إلى الكنز.",s:[3,2,0],g:["B3","C1"],d:[]},
+{t:"ابدأ من الدلافين 🐬 وتجنّب التمساح 🐊!",s:[3,0,0],g:["C1"],d:["A2"]},
+{t:"زُر البوصلة 🧭 ثم الجبال ⛰️ ثم الكنز 💰 بدون التمساح.",s:[3,3,3],g:["C2","B1","C1"],d:["A2","A3"]}
+];
+var cur=0,prog=[],pos,ang,gi,busy=false;
+var board=document.getElementById("board"),msg=document.getElementById("msg"),progEl=document.getElementById("prog");
+var bot=document.createElement("div");bot.id="bot";bot.innerHTML="<div>🐝</div>";
+var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
+var key=function(r,c){return "ABCD"[c]+(r+1)};
+function load(n){
+ cur=n;prog=[];busy=false;
+ var L=LV[n];
+ var lv=document.getElementById("lv");lv.innerHTML="";
+ LV.forEach(function(_,i){var b=document.createElement("button");b.textContent=i+1;b.className=i==n?"on":"";b.onclick=function(){if(!busy)load(i)};lv.appendChild(b)});
+ board.innerHTML="";
+ for(var r=0;r<4;r++)for(var c=0;c<4;c++){
+  var k=key(r,c),t=T[k],d=document.createElement("div");
+  d.className="cell "+t[1]+(L.g.indexOf(k)>-1?" tgt":"")+(L.d.indexOf(k)>-1?" dng":"");
+  d.id="c"+k;
+  d.innerHTML="<span class='lab'>"+k+"</span>"+t[0]+(L.g.indexOf(k)>-1?"<i>"+(L.g.indexOf(k)+1)+"</i>":"");
+  board.appendChild(d);
+ }
+ board.appendChild(bot);
+ resetBot();
+ say("المستوى "+(n+1)+": "+L.t);
+ draw();
+}
+function resetBot(){
+ var s=LV[cur].s;pos={r:s[0],c:s[1]};ang=s[2]*90;gi=0;
+ document.querySelectorAll(".done").forEach(function(e){e.classList.remove("done")});
+ place();
+}
+function place(){
+ bot.style.left=pos.c*25+"%";bot.style.top=pos.r*25+"%";
+ bot.firstChild.style.transform="rotate("+ang+"deg)";
+}
+function say(t){msg.textContent=t}
+function draw(i){
+ progEl.innerHTML="";
+ var sym={F:"⬆️",B:"⬇️",L:"↺",R:"↻"};
+ if(!prog.length)progEl.textContent="أضف أوامر ثم اضغط انطلق";
+ prog.forEach(function(c,j){var s=document.createElement("span");s.textContent=sym[c];if(j===i)s.className="cur";progEl.appendChild(s)});
+}
+document.querySelectorAll("[data-c]").forEach(function(b){b.onclick=function(){
+ if(busy)return;if(prog.length>=40){say("وصلت للحد الأقصى من الأوامر.");return}
+ prog.push(b.dataset.c);draw()}});
+document.getElementById("undo").onclick=function(){if(!busy){prog.pop();draw()}};
+document.getElementById("clr").onclick=function(){if(!busy){prog=[];resetBot();draw();say(LV[cur].t)}};
+document.getElementById("go").onclick=run;
+async function run(){
+ if(busy||!prog.length)return;
+ busy=true;resetBot();await sleep(300);
+ var L=LV[cur],V=[[-1,0],[0,1],[1,0],[0,-1]];
+ for(var i=0;i<prog.length;i++){
+  draw(i);var c=prog[i];
+  if(c=="L")ang-=90;else if(c=="R")ang+=90;
+  else{
+   var d=(((ang/90)%4)+4)%4,m=c=="F"?1:-1;
+   var nr=pos.r+V[d][0]*m,nc=pos.c+V[d][1]*m;
+   if(nr<0||nr>3||nc<0||nc>3){bot.classList.add("bump");await sleep(300);bot.classList.remove("bump");say("اصطدمت بحافة الخريطة!");}
+   else{pos={r:nr,c:nc};}
+  }
+  place();await sleep(650);
+  var k=key(pos.r,pos.c);
+  if(L.d.indexOf(k)>-1){say("😱 أمسك بك التمساح! حاول مرة أخرى بمسار آخر.");finish();return}
+  if(k==L.g[gi]){document.getElementById("c"+k).classList.add("done");gi++;
+   if(gi==L.g.length){draw();say("🎉 أحسنت! وصلت إلى الهدف.");win();return}
+   say("✅ رائع! الآن اذهب إلى: "+T[L.g[gi]][2]);}
+ }
+ say("لم تكتمل المهمة بعد. عدّل الأوامر وحاول مرة أخرى.");finish();
+}
+function finish(){busy=false;draw();setTimeout(function(){if(!busy)resetBot()},1200)}
+function win(){
+ busy=false;
+ var b=document.createElement("button");b.className="go";
+ var last=cur==LV.length-1;
+ b.textContent=last?"🏆 العب من البداية":"المستوى التالي ▶";
+ b.onclick=function(){b.remove();load(last?0:cur+1)};
+ msg.appendChild(document.createElement("br"));msg.appendChild(b);
+}
+load(0);
+</script>
+</body>
+</html>
